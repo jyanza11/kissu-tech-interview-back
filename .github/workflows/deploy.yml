@@ -48,12 +48,17 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          NODE_ENV: test
 
       - name: Run tests
         run: npm test
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           NODE_ENV: test
+          LOG_LEVEL: error
+          REDIS_URL: redis://localhost:6379/1
+          AI_PROVIDER: mock
+          PORT: 3001
 
       - name: Build application
         run: npm run build
@@ -182,6 +187,15 @@ jobs:
             cd /var/www/kissu-tech-interview-back
             echo "🗄️ Running database migrations..."
             
+            # Set production environment variables
+            export NODE_ENV=production
+            export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+            export REDIS_URL="${{ secrets.REDIS_URL }}"
+            export AI_PROVIDER="${{ secrets.AI_PROVIDER }}"
+            export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+            export LOG_LEVEL="${{ secrets.LOG_LEVEL }}"
+            export PORT="${{ secrets.PORT }}"
+            
             # Run Prisma migrations
             npx prisma migrate deploy
             
@@ -197,8 +211,14 @@ jobs:
             cd /var/www/kissu-tech-interview-back
             echo "🏗 Building application..."
             
-            # Set production environment
+            # Set production environment variables
             export NODE_ENV=production
+            export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+            export REDIS_URL="${{ secrets.REDIS_URL }}"
+            export AI_PROVIDER="${{ secrets.AI_PROVIDER }}"
+            export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+            export LOG_LEVEL="${{ secrets.LOG_LEVEL }}"
+            export PORT="${{ secrets.PORT }}"
             
             # Ensure we're using the right Node version
             if command -v nvm >/dev/null 2>&1; then

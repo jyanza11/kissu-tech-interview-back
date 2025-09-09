@@ -9,12 +9,21 @@ This project includes a GitHub Actions workflow that automatically:
 
 ## Required GitHub Secrets
 
-Set up the following secrets in your GitHub repository:
+Set up the following secrets in your GitHub repository (Settings → Secrets and variables → Actions):
 
+### SSH Connection
 - `SSH_PRIVATE_KEY`: Your private SSH key for server access
 - `SSH_HOST`: Your server's IP address or domain
 - `SSH_USER`: SSH username (e.g., `root`, `ubuntu`, `deploy`)
 - `SSH_PORT`: SSH port (usually `22`)
+
+### Application Configuration
+- `DATABASE_URL`: PostgreSQL connection string (e.g., `postgresql://user:pass@host:5432/db`)
+- `REDIS_URL`: Redis connection string (optional, e.g., `redis://host:6379`)
+- `AI_PROVIDER`: AI service provider (`mock` or `openai`)
+- `OPENAI_API_KEY`: OpenAI API key (required if `AI_PROVIDER=openai`)
+- `LOG_LEVEL`: Logging level (`error`, `warn`, `info`, `debug`)
+- `PORT`: Server port number (e.g., `3000`)
 
 ## Server Setup
 
