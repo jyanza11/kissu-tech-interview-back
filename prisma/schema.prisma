@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Watchlist {
+  id        String        @id @default(cuid())
+  name      String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  terms     WatchlistTerm[]
+}
+
+model WatchlistTerm {
+  id          String   @id @default(cuid())
+  term        String
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id])
+  watchlistId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([watchlistId])
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  severity    Severity
+  createdAt   DateTime @default(now())
+  analyses    AIAnalysis[]
+}
+
+model AIAnalysis {
+  id        String   @id @default(cuid())
+  event     Event    @relation(fields: [eventId], references: [id])
+  eventId   String
+  summary   String
+  severity  Severity
+  action    String
+  createdAt DateTime @default(now())
+  @@index([eventId])
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}

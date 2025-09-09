@@ -1,0 +1,248 @@
+name: Deploy Kissu Tech Interview Backend
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Concurrency control - cancel in-progress jobs when new ones are triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+
+      - name: Run tests
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          NODE_ENV: test
+
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Setup Environment
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -l' << 'EOF'
+            set -e
+            
+            # Try to source shell profiles with error handling
+            [ -f ~/.bashrc ] && source ~/.bashrc 2>/dev/null || true
+            [ -f ~/.zshrc ] && source ~/.zshrc 2>/dev/null || true
+            [ -f ~/.profile ] && source ~/.profile 2>/dev/null || true
+            
+            # Load nvm if it exists
+            [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
+            
+            # Try common Node.js paths
+            export PATH="$PATH:/usr/bin:/usr/local/bin:/usr/local/node/bin"
+            
+            # If nvm is available, try to use latest node
+            if command -v nvm >/dev/null 2>&1; then
+              nvm use node 2>/dev/null || true
+            fi
+            
+            # Debug: Show PATH and environment info
+            echo "🔍 Current PATH: $PATH"
+            echo "🔍 npm location: $(which npm 2>/dev/null || echo 'npm not found in PATH')"
+            echo "🔍 Node version: $(node --version 2>/dev/null || echo 'node not found')"
+            echo "🔍 Current shell: $0"
+            echo "✅ Environment setup complete!"
+          EOF
+
+      - name: Pull Latest Code
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -l' << 'EOF'
+            set -e
+            [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
+            
+            cd /var/www/kissu-tech-interview-back
+            echo "📥 Pulling latest code..."
+            
+            # Check if there are any local changes
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "🔄 Local changes detected, stashing them..."
+              git stash push -m "Auto-stash before deployment $(date)"
+            fi
+            
+            # Check for untracked files that would be overwritten
+            if git status --porcelain | grep -q "^??"; then
+              echo "🔄 Untracked files detected, removing them..."
+              git clean -fd
+            fi
+            
+            # Pull the latest code
+            git pull origin main
+            
+            echo "✅ Code updated successfully!"
+          EOF
+
+      - name: Install Dependencies
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -l' << 'EOF'
+            set -e
+            [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
+            
+            cd /var/www/kissu-tech-interview-back
+            echo "📦 Installing dependencies..."
+            
+            # Install dependencies with npm
+            echo "🔄 Installing dependencies with npm..."
+            
+            # Try npm install with timeout and retry logic
+            max_attempts=3
+            attempt=1
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "🔄 Attempt $attempt of $max_attempts..."
+              
+              if timeout 600 npm ci; then
+                echo "✅ npm ci completed successfully!"
+                break
+              else
+                echo "❌ Attempt $attempt failed with exit code $?"
+                
+                if [ $attempt -lt $max_attempts ]; then
+                  echo "🔄 Cleaning npm cache and retrying..."
+                  npm cache clean --force
+                  sleep 10
+                else
+                  echo "❌ All attempts failed, trying with npm install..."
+                  npm install
+                fi
+              fi
+              
+              attempt=$((attempt + 1))
+            done
+            
+            echo "✅ Dependencies installed successfully!"
+            
+            # Generate Prisma client
+            echo "🔧 Generating Prisma client..."
+            npx prisma generate
+            echo "✅ Prisma client generated successfully!"
+          EOF
+
+      - name: Run Database Migrations
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -l' << 'EOF'
+            set -e
+            [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
+            
+            cd /var/www/kissu-tech-interview-back
+            echo "🗄️ Running database migrations..."
+            
+            # Run Prisma migrations
+            npx prisma migrate deploy
+            
+            echo "✅ Database migrations completed successfully!"
+          EOF
+
+      - name: Build Application
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -l' << 'EOF'
+            set -e
+            [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
+            
+            cd /var/www/kissu-tech-interview-back
+            echo "🏗 Building application..."
+            
+            # Set production environment
+            export NODE_ENV=production
+            
+            # Ensure we're using the right Node version
+            if command -v nvm >/dev/null 2>&1; then
+              nvm use 20
+            fi
+            
+            # Build the application
+            npm run build
+            
+            echo "✅ Build completed successfully!"
+          EOF
+
+      - name: Deploy with PM2
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -l' << 'EOF'
+            set -e
+            
+            # Ensure NVM and PM2 are properly loaded
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+            [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
+            
+            cd /var/www/kissu-tech-interview-back
+            echo "🚀 Deploying with PM2 (zero downtime)..."
+            
+            # Verify PM2 is available
+            echo "🔍 PM2 location: $(which pm2 2>/dev/null || echo 'pm2 not found in PATH')"
+            
+            # Try to reload or start the PM2 app (zero downtime)
+            if command -v pm2 >/dev/null 2>&1; then
+              # Check if the app is already running
+              if pm2 describe kissu-backend >/dev/null 2>&1; then
+                echo "🔄 Reloading existing PM2 app..."
+                pm2 reload kissu-backend
+              else
+                echo "🆕 Starting new PM2 app..."
+                pm2 start ecosystem.config.js --env production
+              fi
+            else
+              echo "❌ PM2 not found. Installing PM2 globally..."
+              npm install -g pm2
+              pm2 start ecosystem.config.js --env production
+            fi
+
+            pm2 save
+            echo "✅ Zero-downtime deployment complete!"
+          EOF

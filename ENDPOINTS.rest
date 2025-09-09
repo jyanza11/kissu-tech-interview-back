@@ -1,0 +1,210 @@
+# REST API Tests
+
+This file contains curl commands to test all API endpoints using the seed data.
+
+## Prerequisites
+- API server running on `http://localhost:3001`
+- Seed data loaded (run `pnpm --filter api seed`)
+
+## Health Check
+```bash
+curl -sS http://localhost:3001/health | jq
+```
+
+## Watchlists API
+
+### List all watchlists
+```bash
+curl -sS http://localhost:3001/api/watchlists | jq
+```
+
+### Get specific watchlist (using seed data ID)
+```bash
+curl -sS http://localhost:3001/api/watchlists/seed-default | jq
+```
+
+### Create new watchlist
+```bash
+curl -sS -X POST http://localhost:3001/api/watchlists \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Security Alerts"}' | jq
+```
+
+### Update watchlist
+```bash
+curl -sS -X PUT http://localhost:3001/api/watchlists/seed-default \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Updated Default Watchlist"}' | jq
+```
+
+### Add term to watchlist
+```bash
+curl -sS -X POST http://localhost:3001/api/watchlists/seed-default/terms \
+  -H "Content-Type: application/json" \
+  -d '{"term": "vulnerability"}' | jq
+```
+
+### Delete term from watchlist
+```bash
+# First get the term ID from the watchlist
+curl -sS http://localhost:3001/api/watchlists/seed-default | jq '.terms[0].id'
+
+# Then delete using the term ID (replace TERM_ID with actual ID)
+curl -sS -X DELETE http://localhost:3001/api/watchlists/seed-default/terms/TERM_ID
+```
+
+## Events API
+
+### List all events
+```bash
+curl -sS http://localhost:3001/api/events | jq
+```
+
+### Simulate new event
+```bash
+curl -sS -X POST http://localhost:3001/api/events/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Database Connection Pool Exhausted",
+    "description": "High number of concurrent connections causing pool exhaustion in production database",
+    "severity": "HIGH"
+  }' | jq
+```
+
+### Get event analysis (using seed event ID)
+```bash
+# First get an event ID from the list
+curl -sS http://localhost:3001/api/events | jq '.[0].id'
+
+# Then get analysis (replace EVENT_ID with actual ID)
+curl -sS http://localhost:3001/api/events/EVENT_ID/analysis | jq
+```
+
+## Cache Testing
+
+### Test cache headers on GET endpoints
+```bash
+# First request (should be MISS)
+curl -sS -I http://localhost:3001/api/watchlists | grep -i x-cache
+
+# Second request (should be HIT if Redis is configured)
+curl -sS -I http://localhost:3001/api/watchlists | grep -i x-cache
+```
+
+## Error Testing
+
+### Test validation errors
+```bash
+# Invalid watchlist name (too short)
+curl -sS -X POST http://localhost:3001/api/watchlists \
+  -H "Content-Type: application/json" \
+  -d '{"name": ""}' | jq
+
+# Invalid event severity
+curl -sS -X POST http://localhost:3001/api/events/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Test Event",
+    "description": "Test description",
+    "severity": "INVALID"
+  }' | jq
+```
+
+### Test 404 errors
+```bash
+# Non-existent watchlist
+curl -sS http://localhost:3001/api/watchlists/non-existent-id | jq
+
+# Non-existent event analysis
+curl -sS http://localhost:3001/api/events/non-existent-id/analysis | jq
+```
+
+## Rate Limiting Test
+
+### Test rate limiting (120 requests per minute)
+```bash
+# Run multiple requests quickly to test rate limiting
+for i in {1..5}; do
+  curl -sS -I http://localhost:3001/api/watchlists | grep -i "x-ratelimit"
+  sleep 0.1
+done
+```
+
+## Correlation ID Test
+
+### Test correlation ID propagation
+```bash
+# Send request with custom correlation ID
+curl -sS -H "x-correlation-id: test-123" http://localhost:3001/api/watchlists | jq
+
+# Check response headers for correlation ID
+curl -sS -I -H "x-correlation-id: test-456" http://localhost:3001/api/watchlists | grep -i correlation
+```
+
+## Complete Workflow Test
+
+### End-to-end workflow
+```bash
+#!/bin/bash
+
+echo "=== Complete API Workflow Test ==="
+
+# 1. Health check
+echo "1. Health check:"
+curl -sS http://localhost:3001/health | jq
+
+# 2. List existing watchlists
+echo -e "\n2. List watchlists:"
+curl -sS http://localhost:3001/api/watchlists | jq
+
+# 3. Create new watchlist
+echo -e "\n3. Create new watchlist:"
+WATCHLIST_ID=$(curl -sS -X POST http://localhost:3001/api/watchlists \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Test Watchlist"}' | jq -r '.id')
+echo "Created watchlist ID: $WATCHLIST_ID"
+
+# 4. Add terms to watchlist
+echo -e "\n4. Add terms:"
+curl -sS -X POST http://localhost:3001/api/watchlists/$WATCHLIST_ID/terms \
+  -H "Content-Type: application/json" \
+  -d '{"term": "error"}' | jq
+
+curl -sS -X POST http://localhost:3001/api/watchlists/$WATCHLIST_ID/terms \
+  -H "Content-Type: application/json" \
+  -d '{"term": "warning"}' | jq
+
+# 5. Get updated watchlist
+echo -e "\n5. Get updated watchlist:"
+curl -sS http://localhost:3001/api/watchlists/$WATCHLIST_ID | jq
+
+# 6. Simulate events
+echo -e "\n6. Simulate events:"
+EVENT_ID=$(curl -sS -X POST http://localhost:3001/api/events/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "API Rate Limit Exceeded",
+    "description": "Multiple clients hitting rate limits simultaneously",
+    "severity": "MEDIUM"
+  }' | jq -r '.id')
+echo "Created event ID: $EVENT_ID"
+
+# 7. List events
+echo -e "\n7. List events:"
+curl -sS http://localhost:3001/api/events | jq
+
+# 8. Get event analysis
+echo -e "\n8. Get event analysis:"
+curl -sS http://localhost:3001/api/events/$EVENT_ID/analysis | jq
+
+echo -e "\n=== Workflow completed ==="
+```
+
+## Notes
+
+- Replace `jq` with `cat` if jq is not installed
+- All endpoints return JSON responses
+- Cache headers (`X-Cache: HIT/MISS`) are included in responses when Redis is configured
+- Correlation IDs are propagated in response headers
+- Rate limiting headers are included in responses
+- Error responses include validation details and correlation IDs
