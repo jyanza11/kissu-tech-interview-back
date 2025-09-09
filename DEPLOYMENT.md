@@ -91,10 +91,14 @@ RATE_LIMIT_MAX_REQUESTS=100
 ### 5. Install Dependencies and Build
 
 ```bash
-npm ci
+# Install pnpm if not available
+npm install -g pnpm
+
+# Install dependencies
+pnpm install --frozen-lockfile
 npx prisma generate
 npx prisma migrate deploy
-npm run build
+pnpm run build
 ```
 
 ### 6. Start with PM2
@@ -110,8 +114,11 @@ pm2 save
 # Pull latest code
 git pull origin main
 
+# Install pnpm if not available
+npm install -g pnpm
+
 # Install dependencies
-npm ci
+pnpm install --frozen-lockfile
 
 # Generate Prisma client
 npx prisma generate
@@ -120,7 +127,7 @@ npx prisma generate
 npx prisma migrate deploy
 
 # Build application
-npm run build
+pnpm run build
 
 # Reload PM2 (zero downtime)
 pm2 reload kissu-backend
