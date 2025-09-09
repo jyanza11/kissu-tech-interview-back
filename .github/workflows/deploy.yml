@@ -111,7 +111,7 @@ jobs:
             set -e
             [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
             
-            cd /var/www/kissu-tech-interview-back
+            cd /var/www/klixinternet/kissu-tech-interview-back
             echo "📥 Pulling latest code..."
             
             # Check if there are any local changes
@@ -138,7 +138,7 @@ jobs:
             set -e
             [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
             
-            cd /var/www/kissu-tech-interview-back
+            cd /var/www/klixinternet/kissu-tech-interview-back
             echo "📦 Installing dependencies..."
             
             # Install dependencies with npm
@@ -184,7 +184,7 @@ jobs:
             set -e
             [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
             
-            cd /var/www/kissu-tech-interview-back
+            cd /var/www/klixinternet/kissu-tech-interview-back
             echo "🗄️ Running database migrations..."
             
             # Set production environment variables
@@ -208,7 +208,7 @@ jobs:
             set -e
             [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh 2>/dev/null || true
             
-            cd /var/www/kissu-tech-interview-back
+            cd /var/www/klixinternet/kissu-tech-interview-back
             echo "🏗 Building application..."
             
             # Set production environment variables
@@ -241,7 +241,7 @@ jobs:
             [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
             [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
             
-            cd /var/www/kissu-tech-interview-back
+            cd /var/www/klixinternet/kissu-tech-interview-back
             echo "🚀 Deploying with PM2 (zero downtime)..."
             
             # Verify PM2 is available

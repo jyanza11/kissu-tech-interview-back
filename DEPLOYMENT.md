@@ -45,9 +45,9 @@ sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -
 ### 2. Create Application Directory
 
 ```bash
-sudo mkdir -p /var/www/kissu-tech-interview-back
-sudo chown $USER:$USER /var/www/kissu-tech-interview-back
-cd /var/www/kissu-tech-interview-back
+sudo mkdir -p /var/www/klixinternet/kissu-tech-interview-back
+sudo chown $USER:$USER /var/www/klixinternet/kissu-tech-interview-back
+cd /var/www/klixinternet/kissu-tech-interview-back
 ```
 
 ### 3. Clone Repository
